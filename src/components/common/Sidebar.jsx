@@ -1,8 +1,9 @@
 import { FaCircle, FaMapMarkerAlt } from "react-icons/fa";
 import startLocationIcons from "../../assets/input-icons1.png";
-import endLocationIcons from "../../assets/input-icons.png";
 import { useWaypoints } from "../../context/WaypointsContext";
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
+import ClickRouteSideBar from "../ClickRouteSideBar";
+import PreviewSideBar from "../ClickPreviewSideBar";
 
 export default function Sidebar() {
   const {
@@ -25,10 +26,13 @@ export default function Sidebar() {
     clearSuggestions,
     updateWaypoints,
     waypoints,
+    isColor,
+    setIsColor,
   } = useWaypoints();
 
   // Debounce timer ref
   const debounceTimer = useRef(null);
+
 
   // Debounced search function
   const debouncedSearch = useCallback((query, isStart) => {
@@ -120,8 +124,13 @@ export default function Sidebar() {
     };
   }, []);
 
+  const ClickButtonHandle = (item) => {
+    setIsColor(item);
+  };
+
+
   return (
-    <div className="w-72 bg-[#000000]   h-[90vh]">
+    <div className="w-72 bg-[#000000]   ">
       <div className="rounded-2xl bg-[#121216] h-full border-gray-800 flex flex-col p-3">
         {error && (
           <div className="bg-red-500 text-white px-4 py-2 rounded-lg mb-4 text-sm">
@@ -130,86 +139,33 @@ export default function Sidebar() {
         )}
 
         <div className="flex border border-gray-800 rounded-full p-1">
-          <button className="flex-1 px-4 text-white cursor-pointer py-2 bg-[#0A84FF] rounded-full border-b-2 border-blue-500">
-            Routes
-          </button>
-          <button className="flex-1 px-4 cursor-pointer py-2 text-gray-400 rounded-full hover:bg-gray-800">
-            Preview
-          </button>
+          {["Routes", "Preview"].map((item, i) => (
+            <button
+              key={i}
+              onClick={() => ClickButtonHandle(item)}
+              className={`flex-1 px-4 text-white duration-500 cursor-pointer py-2 rounded-full  ${
+                isColor === item ? "bg-[#0A84FF]" : "  "
+              }`}
+            >
+              {item}
+            </button>
+          ))}
         </div>
         <div className="border-gray-800 border mt-6" />
-
-        <div className="p-4">
-          <div className="text-sm text-gray-400 mb-4">
-            {waypoints || 0} Way points
-          </div>
-
-          <div className="space-y-3">
-            <div className="relative">
-              <div className="flex items-center space-x-2 p-3 rounded-full bg-[#202024]">
-                <img src={startLocationIcons} alt="" />
-                <input
-                  type="text"
-                  placeholder="Starting point"
-                  name="startingPoint"
-                  id="startingPoint"
-                  onChange={(e) => handleInputChange(e, true)}
-                  value={startingPoint}
-                  className="bg-transparent w-full text-gray-400 text-sm outline-none"
-                  disabled={isLoading}
-                />
-                {isLoading && startingPoint && (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400" />
-                )}
-              </div>
-              {startingSuggestions.length > 0 && (
-                <div className="absolute w-full mt-1 bg-[#202024] rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
-                  {startingSuggestions.map((place) => (
-                    <div
-                      key={place.id}
-                      className="px-4 py-2 hover:bg-[#2C2C30] cursor-pointer text-gray-400 text-xs"
-                      onClick={() => handleSelectLocation(place, true)}
-                    >
-                      {place.place_name}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="relative">
-              <div className="flex items-center space-x-2 p-3 rounded-full bg-[#202024]">
-                <img src={endLocationIcons} alt="" />
-                <input
-                  type="text"
-                  placeholder="Ending point"
-                  name="endingPoint"
-                  id="endingPoint"
-                  onChange={(e) => handleInputChange(e, false)}
-                  value={endingPoint}
-                  className="bg-transparent w-full text-gray-400 text-sm outline-none"
-                  disabled={isLoading}
-                />
-                {isLoading && endingPoint && (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400" />
-                )}
-              </div>
-              {endingSuggestions.length > 0 && (
-                <div className="absolute w-full mt-1 bg-[#202024] rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
-                  {endingSuggestions.map((place) => (
-                    <div
-                      key={place.id}
-                      className="px-4 py-2 hover:bg-[#2C2C30] cursor-pointer text-gray-400 text-xs"
-                      onClick={() => handleSelectLocation(place, false)}
-                    >
-                      {place.place_name}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        {isColor === "Routes" ? (
+          <ClickRouteSideBar
+            handleInputChange={handleInputChange}
+            handleSelectLocation={handleSelectLocation}
+            startingSuggestions={startingSuggestions}
+            startLocationIcons={startLocationIcons}
+            waypoints={waypoints}
+            isLoading={isLoading}
+            startingPoint={startingPoint}
+            endingPoint={endingPoint}
+          />
+        ) : (
+          <PreviewSideBar />
+        )}
       </div>
     </div>
   );
