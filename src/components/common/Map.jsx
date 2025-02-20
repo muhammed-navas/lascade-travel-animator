@@ -64,7 +64,7 @@ export default function Map() {
       {isColor === "Preview" ? (
         <div className="absolute  inset-0 w-md h-[20rem] top-[50%] left-[50%] transform -translate-y-1/2 -translate-x-1/2 rounded-2xl">
           <MapPreview />
-          {/* <ThreeJSCar /> */}
+          <ThreeJSCar />
         </div>
       ) : (
         <div className="w-full h-full  bg-[#121216] rounded-2xl overflow-hidden">
