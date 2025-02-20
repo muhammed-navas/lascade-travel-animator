@@ -1,11 +1,9 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useWaypoints } from "../../context/WaypointsContext";
 
-// Set your Mapbox token
-mapboxgl.accessToken =
-  "pk.eyJ1IjoiYWxlbmpvc2VwaCIsImEiOiJjbTc0emVvdmMwY2VzMmtzY3RmbWg1ZTZlIn0.EHquBjE0wqvheFvHZaeKtg";
+mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 
 const MapPreview = () => {
   const { endingPoint, startingPoint } = useWaypoints();
@@ -36,14 +34,14 @@ const MapPreview = () => {
       map.current = new mapboxgl.Map({
         container: container,
         style: "mapbox://styles/mapbox/streets-v11",
-        center: [76.2673, 9.9312], // Default center (Kochi)
-        zoom: 14,
-        pitch: 60,
-        bearing: 30,
+        center: [76.2673, 9.9312],
+        zoom: 12,
+        pitch: 0,
+        bearing: 0,
+        duration:1000,
       });
 
       map.current.on("load", () => {
-        // Add the route line source and layer
         map.current.addSource("routeLine", {
           type: "geojson",
           data: {
@@ -71,7 +69,6 @@ const MapPreview = () => {
           },
         });
 
-        // Add animated line layer
         map.current.addSource("animatedLine", {
           type: "geojson",
           data: {
@@ -114,11 +111,9 @@ const MapPreview = () => {
     };
   }, []);
 
-  // Helper function to get coordinates from location object
   const getCoordinates = async (location) => {
     if (!location) return null;
 
-    // Handle if location already has coordinates
     if (typeof location === "object" && Array.isArray(location.center)) {
       return location.center;
     }
@@ -144,15 +139,14 @@ const MapPreview = () => {
         return data.features[0].center;
       } else {
         console.error("No location found for:", locationString);
-        return [76.2673, 9.9312]; // Default fallback coordinates
+        return [76.2673, 9.9312];
       }
     } catch (error) {
       console.error("Error fetching coordinates:", error);
-      return [76.2673, 9.9312]; // Default fallback coordinates
+      return [76.2673, 9.9312];
     }
   };
 
-  // Create location marker
   const createLocationMarker = (coordinates, color) => {
     const el = document.createElement("div");
     el.className = "location-marker";
@@ -166,7 +160,6 @@ const MapPreview = () => {
     return new mapboxgl.Marker(el).setLngLat(coordinates);
   };
 
-  // Interpolate function for animation
   const interpolate = (start, end, fraction) => {
     return [
       start[0] + (end[0] - start[0]) * fraction,
@@ -174,43 +167,24 @@ const MapPreview = () => {
     ];
   };
 
-  // Function to fit bounds with custom zoom level
   const fitBoundsWithZoom = (startCoords, endCoords, padding = 100) => {
     const bounds = new mapboxgl.LngLatBounds()
       .extend(startCoords)
       .extend(endCoords);
 
-    // Calculate the optimal zoom level based on the distance between points
-    const distance = Math.sqrt(
-      Math.pow(endCoords[0] - startCoords[0], 2) +
-        Math.pow(endCoords[1] - startCoords[1], 2)
-    );
-
-    // Adjust zoom level based on distance
-    const zoomLevel = Math.min(
-      13, // Maximum zoom level
-      Math.max(
-        10, // Minimum zoom level
-        14 - Math.log2(distance * 100) // Dynamic zoom calculation
-      )
-    );
-
     map.current.fitBounds(bounds, {
       padding,
       duration: 1000,
-      maxZoom: zoomLevel,
+      maxZoom: 12,
     });
   };
 
-  // Update map when start or end points change
   useEffect(() => {
     if (!map.current || !startingPoint || !endingPoint) return;
 
-    // If map is loaded, update with locations
     if (map.current.loaded()) {
       updateMapWithLocations();
     } else {
-      // If map isn't loaded yet, listen for the load event
       map.current.once("load", updateMapWithLocations);
     }
   }, [startingPoint, endingPoint]);
@@ -222,7 +196,6 @@ const MapPreview = () => {
     }
 
     try {
-      // Get coordinates from context or fetch if needed
       const startCoords = Array.isArray(startingPoint?.center)
         ? startingPoint.center
         : await getCoordinates(startingPoint);
@@ -235,7 +208,6 @@ const MapPreview = () => {
         return;
       }
 
-      // Remove existing markers
       if (startMarkerRef.current) startMarkerRef.current.remove();
       if (endMarkerRef.current) endMarkerRef.current.remove();
       if (marker.current) marker.current.remove();
@@ -246,11 +218,9 @@ const MapPreview = () => {
       endMarkerRef.current = createLocationMarker(endCoords, "#ff0000");
       endMarkerRef.current.addTo(map.current);
 
-      // Show popups initially
       startMarkerRef.current.togglePopup();
       endMarkerRef.current.togglePopup();
 
-      // Create vehicle marker for animation
       const vehicleEl = document.createElement("div");
       vehicleEl.className = "vehicle-marker";
       vehicleEl.style.width = "20px";
@@ -264,10 +234,15 @@ const MapPreview = () => {
         .setLngLat(startCoords)
         .addTo(map.current);
 
-      // Initial fit bounds
-      fitBoundsWithZoom(startCoords, endCoords);
+      // Set initial camera position without fitBounds
+      map.current.flyTo({
+        center: startCoords,
+        zoom: 9,
+        bearing: 30,
+        pitch: 60,
+        duration: 1000,
+      });
 
-      // Start animation after short delay
       setTimeout(() => {
         startAnimation(startCoords, endCoords);
       }, 1000);
@@ -276,20 +251,17 @@ const MapPreview = () => {
     }
   };
 
-  // Animation function
   const startAnimation = (startCoords, endCoords) => {
     isAnimating.current = true;
     let start = 0;
-    const duration = 8000; // 8 seconds animation
+    const duration = 8000;
 
     function animate(timestamp) {
       if (!start) start = timestamp;
       const progress = Math.min((timestamp - start) / duration, 1);
 
-      // Get current point
       const currentPoint = interpolate(startCoords, endCoords, progress);
 
-      // Update the animated line
       const lineCoordinates = [
         startCoords,
         ...Array.from({ length: 100 }, (_, i) => {
@@ -311,18 +283,16 @@ const MapPreview = () => {
         });
       }
 
-      // Update marker position
       if (marker.current) {
         marker.current.setLngLat(currentPoint);
       }
 
-      // Follow animation with camera
       if (progress < 0.95) {
         map.current.easeTo({
           center: currentPoint,
           zoom: 8,
-          bearing: 30,
-          pitch: 60,
+          bearing: 0,
+          pitch: 45,
           duration: 100,
         });
       }
@@ -331,11 +301,8 @@ const MapPreview = () => {
         animationFrameId.current = requestAnimationFrame(animate);
       } else {
         isAnimating.current = false;
-
-        // Zoom out to show both points at the end of animation
-        setTimeout(() => {
-          fitBoundsWithZoom(startCoords, endCoords, 50);
-        }, 500);
+        // Only call fitBounds at the end of the animation
+        fitBoundsWithZoom(startCoords, endCoords, 50);
       }
     }
 
