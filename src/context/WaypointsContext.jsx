@@ -4,10 +4,12 @@ const WaypointsContext = createContext();
 
 export function WaypointsProvider({ children }) {
   const [waypoints, setWaypoints] = useState(2);
-  const [startingPoint, setStartingPoint] = useState(
-    "Edappally, Ernakulam, Ernakulam, Kerala, India"
-  );
-  const [endingPoint, setEndingPoint] = useState("aluva");
+  // const [startingPoint, setStartingPoint] = useState(
+  //   "Edapally Overbridge, 682024, Edappally, Ernakulam, Ernakulam, Kerala, India"
+  // );
+  const [startingPoint, setStartingPoint] = useState("Thrissur, Kerala, India");
+  const [endingPoint, setEndingPoint] = useState("kollam");
+  // const [endingPoint, setEndingPoint] = useState("Aluva, Kerala, India");
   const [startingSuggestions, setStartingSuggestions] = useState([]);
   const [endingSuggestions, setEndingSuggestions] = useState([]);
   const [selectedStartLocation, setSelectedStartLocation] = useState(null);

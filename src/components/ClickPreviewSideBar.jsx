@@ -9,7 +9,7 @@ const PreviewSideBar = () => {
   return (
     <div className="p-4 text-white">
       <div className="max-w-md mx-auto flex flex-col justify-between  ">
-        <div className="space-y-6">
+        <div className="space-y-4">
           <div className="space-y-2">
             <div className="flex text-xs justify-between">
               <span>Model size</span>
