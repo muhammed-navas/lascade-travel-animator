@@ -96,7 +96,7 @@ const ThreeJSCar = () => {
   return (
     <canvas
       ref={canvasRef}
-      className="absolute top-0 left-0 w-full h-full z-10 pointer-events-none"
+      className="absolute top-[50%] left-[50%] transform -translate-y-1/2 -translate-x-1/2 z-[999] pointer-events-none"
     />
   );
 };
