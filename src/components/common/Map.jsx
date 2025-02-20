@@ -8,23 +8,23 @@ import MapPreview from "../map/MapPreview";
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 
 export default function Map() {
-  const { waypoints, isColor } = useWaypoints();
+  const { waypoints, isColor, selectedStartLocation, selectedEndLocation } =
+    useWaypoints();
   const mapContainer = useRef(null);
   const map = useRef(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(null);
   const markersRef = useRef([]);
+  const animationRef = useRef(null);
 
-  // Initialize map
   useEffect(() => {
-    if (map.current) {
-      map.current.remove();
-      map.current = null;
-    }
+    // Ensure the map container is available in the DOM
+    if (!mapContainer.current) return;
 
     try {
+      // Initialize the map only if the container is available
       map.current = new mapboxgl.Map({
-        container: mapContainer.current,
+        container: mapContainer.current, // Ensure this is a valid HTML element
         style: "mapbox://styles/mapbox/streets-v11",
         center: [76.2673, 9.9312],
         zoom: 12,
@@ -34,9 +34,7 @@ export default function Map() {
       });
 
       map.current.on("load", () => {
-        map.current.resize();
-        map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
-        setMapReady(true);
+        setMapReady(true); // Set map as ready once loaded
       });
 
       map.current.on("error", (error) => {
@@ -48,93 +46,35 @@ export default function Map() {
       setMapError(error);
     }
 
+    // Cleanup function
     return () => {
       if (map.current) {
         map.current.remove();
         map.current = null;
       }
-    };
-  }, [isColor]);
-
-  // Handle waypoints updates
-  useEffect(() => {
-    if (!map.current || !mapReady || !waypoints) return;
-
-    // Clear existing markers
-    markersRef.current.forEach((marker) => marker.remove());
-    markersRef.current = [];
-
-    // Add new markers
-    const bounds = new mapboxgl.LngLatBounds();
-
-    // waypoints.forEach((waypoint) => {
-    //   const marker = new mapboxgl.Marker()
-    //     .setLngLat([waypoint.longitude, waypoint.latitude])
-    //     .addTo(map.current);
-
-    //   if (waypoint.name) {
-    //     new mapboxgl.Popup({ offset: 25 })
-    //       .setLngLat([waypoint.longitude, waypoint.latitude])
-    //       .setHTML(`<h3>${waypoint.name}</h3>`)
-    //       .addTo(map.current);
-    //   }
-
-    //   markersRef.current.push(marker);
-    //   bounds.extend([waypoint.longitude, waypoint.latitude]);
-    // });
-
-    // Fit bounds if there are waypoints
-    // if (waypoints.length > 0) {
-    //   map.current.fitBounds(bounds, {
-    //     padding: 50,
-    //     maxZoom: 15,
-    //   });
-    // }
-  }, [waypoints, mapReady]);
-
-  // Handle resize
-  useEffect(() => {
-    if (!map.current) return;
-
-    const resizeHandler = () => {
-      if (map.current) {
-        map.current.resize();
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
       }
     };
-
-    setTimeout(resizeHandler, 100);
-    window.addEventListener("resize", resizeHandler);
-
-    return () => {
-      window.removeEventListener("resize", resizeHandler);
-    };
-  }, [mapReady, isColor]);
-
-  if (mapError) {
-    return (
-      <div className="text-red-500 p-4">
-        Error loading map: {mapError.message}
-      </div>
-    );
-  }
+  }, [isColor]); // Re-run effect if `isColor` changes
 
   return (
     <div className="w-full h-full relative">
-      {isColor === "Routes" ? (
-        <div className="absolute inset-0 bg-[#121216] rounded-2xl overflow-hidden">
-          <div ref={mapContainer} className="w-full h-full" />
+      {/* Always render the map container, but conditionally show content */}
+    
+
+      {/* Show MapPreview only if `isColor` is not "Routes" */}
+      {isColor === "Preview" ? (
+        <div className="absolute inset-0 w-md h-[20rem] top-[50%] left-[50%] transform -translate-y-1/2 -translate-x-1/2 rounded-2xl">
+          <MapPreview />
         </div>
-      ) : (
-        <div className="absolute inset-0 bg-[#121216] rounded-2xl flex items-center justify-center">
-          <MapPreview
-            mapContainer={mapContainer}
-            map={map}
-            setMapReady={setMapReady}
-            setMapError={setMapError}
-          />
-        </div>
+      ):(
+  <div className="w-full h-full bg-[#121216] rounded-2xl overflow-hidden">
+        <div ref={mapContainer} className="w-full h-full" />
+      </div>
       )}
 
+      {/* Show warning if waypoints are insufficient */}
       {waypoints?.length < 2 && (
         <div className="absolute bottom-2 right-2 z-10 flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl">
           <img src={not} alt="not" className="w-4 h-4" />
