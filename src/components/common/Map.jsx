@@ -4,6 +4,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { useWaypoints } from "../../context/WaypointsContext";
 import not from "../../assets/not.png";
 import MapPreview from "../map/MapPreview";
+import ThreeJSCar from "../map/Three";
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 
@@ -25,7 +26,7 @@ export default function Map() {
       // Initialize the map only if the container is available
       map.current = new mapboxgl.Map({
         container: mapContainer.current, // Ensure this is a valid HTML element
-        style: "mapbox://styles/mapbox/streets-v11",
+        style: "mapbox://styles/mapbox/streets-v12",
         center: [76.2673, 9.9312],
         zoom: 12,
         pitch: 0,
@@ -60,18 +61,15 @@ export default function Map() {
 
   return (
     <div className="w-full h-full relative">
-      {/* Always render the map container, but conditionally show content */}
-    
-
-      {/* Show MapPreview only if `isColor` is not "Routes" */}
       {isColor === "Preview" ? (
-        <div className="absolute inset-0 w-md h-[20rem] top-[50%] left-[50%] transform -translate-y-1/2 -translate-x-1/2 rounded-2xl">
+        <div className="absolute  inset-0 w-md h-[20rem] top-[50%] left-[50%] transform -translate-y-1/2 -translate-x-1/2 rounded-2xl">
           <MapPreview />
+          {/* <ThreeJSCar /> */}
         </div>
-      ):(
-  <div className="w-full h-full bg-[#121216] rounded-2xl overflow-hidden">
-        <div ref={mapContainer} className="w-full h-full" />
-      </div>
+      ) : (
+        <div className="w-full h-full  bg-[#121216] rounded-2xl overflow-hidden">
+          <div ref={mapContainer} className="w-full h-full" />
+        </div>
       )}
 
       {/* Show warning if waypoints are insufficient */}

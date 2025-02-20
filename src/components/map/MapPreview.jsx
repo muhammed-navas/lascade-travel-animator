@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useWaypoints } from "../../context/WaypointsContext";
+import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 
@@ -211,7 +213,7 @@ const MapPreview = () => {
       if (startMarkerRef.current) startMarkerRef.current.remove();
       if (endMarkerRef.current) endMarkerRef.current.remove();
       if (marker.current) marker.current.remove();
-
+// #143D60
       startMarkerRef.current = createLocationMarker(startCoords, "#00ff00");
       startMarkerRef.current.addTo(map.current);
 
@@ -221,23 +223,101 @@ const MapPreview = () => {
       startMarkerRef.current.togglePopup();
       endMarkerRef.current.togglePopup();
 
+       const scene = new THREE.Scene();
+       const camera = new THREE.PerspectiveCamera(
+         75,
+         window.innerWidth / window.innerHeight,
+         0.1,
+         1000
+       );
+       const renderer = new THREE.WebGLRenderer({
+         canvas: canvasRef.current,
+         alpha: true,
+       });
+
+       renderer.setSize(window.innerWidth, window.innerHeight);
+
+          const loader = new GLTFLoader();
+          loader.load(
+            "/volk.glb",
+            (gltf) => {
+              const model = gltf.scene;
+              model.scale.set(0.3, 0.3, 0.3);
+              model.rotation.y = 3.14;
+              model.rotation.x = 0;
+              scene.add(model);
+              modelRef.current = model; // Store the model reference
+            },
+            undefined,
+            (error) => {
+              console.error("Error loading GLB model:", error);
+            }
+          );
+
+           const light = new THREE.DirectionalLight(0xffffff, 1);
+           light.position.set(1, 1, 1);
+           scene.add(light);
+           scene.add(new THREE.AmbientLight(0x404040));
+
+           camera.position.z = 5;
+
+           // Animation parameters
+           const bounceSpeed = 3; // Speed of the bounce
+           const bounceHeight = 0.05; // Height of the bounce
+           const wobbleSpeed = 3; // Speed of the wobble
+           const wobbleAmount = 0.05; // Amount of wobble rotation
+
+           // Animation loop
+           const clock = new THREE.Clock();
+           const animate = () => {
+             requestAnimationFrame(animate);
+
+             if (modelRef.current) {
+               const time = clock.getElapsedTime();
+
+               // Bounce motion (up and down)
+               modelRef.current.position.y =
+                 Math.sin(time * bounceSpeed) * bounceHeight;
+
+               // Wobble motion (slight rotation)
+               modelRef.current.rotation.z =
+                 Math.sin(time * wobbleSpeed) * wobbleAmount;
+
+               // Subtle forward/backward tilt
+               modelRef.current.rotation.x =
+                 0.7 + Math.sin(time * bounceSpeed * 2) * 0.02;
+             }
+
+             renderer.render(scene, camera);
+           };
+
+           animate();
+            const handleResize = () => {
+              camera.aspect = window.innerWidth / window.innerHeight;
+              camera.updateProjectionMatrix();
+              renderer.setSize(window.innerWidth, window.innerHeight);
+            };
+
+            window.addEventListener("resize", handleResize);
+
+
       const vehicleEl = document.createElement("div");
       vehicleEl.className = "vehicle-marker";
-      vehicleEl.style.width = "20px";
-      vehicleEl.style.height = "20px";
+      vehicleEl.style.width = "40px";
+      vehicleEl.style.height = "40px";
       vehicleEl.style.borderRadius = "50%";
       vehicleEl.style.backgroundColor = "#3a86ff";
       vehicleEl.style.border = "3px solid white";
       vehicleEl.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
 
-      marker.current = new mapboxgl.Marker(vehicleEl)
+      marker.current = new mapboxgl.Marker(loader)
         .setLngLat(startCoords)
         .addTo(map.current);
 
       // Set initial camera position without fitBounds
       map.current.flyTo({
         center: startCoords,
-        zoom: 9,
+        zoom: 8,
         bearing: 30,
         pitch: 60,
         duration: 1000,
@@ -254,7 +334,7 @@ const MapPreview = () => {
   const startAnimation = (startCoords, endCoords) => {
     isAnimating.current = true;
     let start = 0;
-    const duration = 8000;
+    const duration = 8000 ;
 
     function animate(timestamp) {
       if (!start) start = timestamp;
@@ -290,7 +370,7 @@ const MapPreview = () => {
       if (progress < 0.95) {
         map.current.easeTo({
           center: currentPoint,
-          zoom: 8,
+          zoom: 9,
           bearing: 0,
           pitch: 45,
           duration: 100,
