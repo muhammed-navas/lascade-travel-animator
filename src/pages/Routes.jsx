@@ -2,6 +2,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import Header from "../components/layout/Header";
 import Sidebar from "../components/common/Sidebar";
 import Map from "../components/common/Map";
+import ModelViewer from "../components/map/SideBarForChoosing";
 
 function Home() {
   return (

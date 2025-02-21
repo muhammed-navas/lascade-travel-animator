@@ -13,13 +13,15 @@ const ClickRouteSideBar = ({
   endingSuggestions,
 }) => {
   return (
-    <div className="p-4">
+    <div className="py-4 px-2">
       <div className="text-sm text-gray-400 mb-4">
         {waypoints || 0} Way points
       </div>
 
       <div className="space-y-3">
-        <div className="relative">
+        <div className="relative flex items-center gap-2">
+          {" "}
+          <span className="text-white">==</span>
           <div className="flex items-center space-x-2 p-3 rounded-full bg-[#202024]">
             <img src={startLocationIcons} alt="" />
             <input
@@ -51,7 +53,9 @@ const ClickRouteSideBar = ({
           )}
         </div>
 
-        <div className="relative">
+        <div className="relative flex items-center gap-2">
+          {" "}
+          <span className="text-white">==</span>
           <div className="flex items-center space-x-2 p-3 rounded-full bg-[#202024]">
             <img src={endLocationIcons} alt="" />
             <input

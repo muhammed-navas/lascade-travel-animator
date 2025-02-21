@@ -7,31 +7,50 @@ const ThreeJSCar = () => {
   const modelRef = useRef(null);
 
   useEffect(() => {
+    // Basic scene setup with minimal configuration
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(
-      75,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 10);
     const renderer = new THREE.WebGLRenderer({
       canvas: canvasRef.current,
       alpha: true,
     });
 
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    // Set fixed size for the model display
+    renderer.setSize(300, 300);
+    camera.position.z = 3;
 
-    // Load GLB model
+    // Simple lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+
+    // Load GLB model with simplified positioning
     const loader = new GLTFLoader();
     loader.load(
       "/volk.glb",
       (gltf) => {
         const model = gltf.scene;
-        model.scale.set(0.3, 0.3, 0.3);
-        model.rotation.y = 3.14;
-        model.rotation.x = 0;
+
+        // Fixed scale and rotation
+        model.scale.set(0.9, 0.9, 0.9);
+        model.rotation.y = Math.PI;
+
         scene.add(model);
-        modelRef.current = model; // Store the model reference
+        modelRef.current = model;
+
+        // Simple animation loop
+        const animate = () => {
+          requestAnimationFrame(animate);
+
+          if (modelRef.current) {
+            // Gentle floating animation
+            // modelRef.current.position.y = Math.sin(Date.now() * 0.002) * 0.5;
+            // Subtle rotation
+            // modelRef.current.rotation.y = Math.PI + Math.sin(Date.now() * 0.001) * 0.9;
+          }
+
+          renderer.render(scene, camera);
+        };
+
+        animate();
       },
       undefined,
       (error) => {
@@ -39,67 +58,21 @@ const ThreeJSCar = () => {
       }
     );
 
-    // Add lights
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(1, 1, 1);
-    scene.add(light);
-    scene.add(new THREE.AmbientLight(0x404040));
-
-    camera.position.z = 5;
-
-    // Animation parameters
-    const bounceSpeed = 3; // Speed of the bounce
-    const bounceHeight = 0.05; // Height of the bounce
-    const wobbleSpeed = 3; // Speed of the wobble
-    const wobbleAmount = 0.05; // Amount of wobble rotation
-
-    // Animation loop
-    const clock = new THREE.Clock();
-    const animate = () => {
-      requestAnimationFrame(animate);
-
-      if (modelRef.current) {
-        const time = clock.getElapsedTime();
-
-        // Bounce motion (up and down)
-        modelRef.current.position.y =
-          Math.sin(time * bounceSpeed) * bounceHeight;
-
-        // Wobble motion (slight rotation)
-        modelRef.current.rotation.z =
-          Math.sin(time * wobbleSpeed) * wobbleAmount;
-
-        // Subtle forward/backward tilt
-        modelRef.current.rotation.x =
-          0.7 + Math.sin(time * bounceSpeed * 2) * 0.02;
-      }
-
-      renderer.render(scene, camera);
-    };
-
-    animate();
-
-    // Handle window resize
-    const handleResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    };
-
-    window.addEventListener("resize", handleResize);
-
     return () => {
-      window.removeEventListener("resize", handleResize);
+      // Clean up
+      if (modelRef.current) {
+        scene.remove(modelRef.current);
+      }
+      renderer.dispose();
     };
   }, []);
 
   return (
     <canvas
       ref={canvasRef}
-      className="absolute top-[50%] left-[50%] transform -translate-y-1/2 -translate-x-1/2 z-[999] pointer-events-none"
+      className="pointer-events-none absolute  inset-0 top-[50%] left-[50%] transform -translate-y-1/2 -translate-x-1/2 "
     />
   );
 };
 
 export default ThreeJSCar;
- 
