@@ -24,6 +24,11 @@ export default function Map() {
   const [mapError, setMapError] = useState(null);
   const markersRef = useRef([]);
   const animationRef = useRef(null);
+    const [markerPositions, setMarkerPositions] = useState({
+      start: null,
+      end: null,
+      waypoint: null,
+    });
 
   // Location database with coordinates
   const locationDatabase = {
@@ -54,9 +59,9 @@ export default function Map() {
   };
 
   // Helper function to normalize location strings
-  const normalizeLocation = (location) => {
-    return location.toLowerCase().replace(/[^a-z0-9]/g, "");
-  };
+ const normalizeLocation = (location) => {
+   return location.toLowerCase().replace(/[^a-z0-9]/g, "");
+ };
 
   // Helper function to get coordinates from various input formats
   const getCoordinates = (location, defaultCoords) => {
@@ -133,6 +138,125 @@ export default function Map() {
     };
   }, [isColor]);
 
+   const createDraggableMarker = (
+     coordinates,
+     isStart = true,
+     isWaypoint = false
+   ) => {
+     const el = document.createElement("div");
+     el.className = isWaypoint
+       ? "waypoint-marker"
+       : isStart
+       ? "starting-marker"
+       : "ending-marker";
+     el.style.backgroundImage = `url(${flight})`;
+     el.style.width = isWaypoint ? "35px" : "30px";
+     el.style.height = isWaypoint ? "35px" : "30px";
+     el.style.backgroundSize = "100%";
+     el.style.borderRadius = "50%";
+     el.style.cursor = "move";
+
+     const marker = new mapboxgl.Marker({
+       element: el,
+       draggable: true,
+     })
+       .setLngLat(coordinates)
+       .addTo(map.current);
+
+     // Add drag events
+     marker.on("dragend", () => {
+       const newPos = marker.getLngLat();
+       const position = {
+         lng: newPos.lng,
+         lat: newPos.lat,
+       };
+
+       // Update positions state
+       setMarkerPositions((prev) => ({
+         ...prev,
+         [isWaypoint ? "waypoint" : isStart ? "start" : "end"]: position,
+       }));
+
+       // Update context if needed
+       if (isStart) {
+         setStartingPoint([position.lng, position.lat]);
+       } else if (!isWaypoint) {
+         setEndingPoint([position.lng, position.lat]);
+       }
+
+       // Update route
+       updateRoute();
+     });
+
+     // Add popup if location info exists
+     if (!isWaypoint) {
+       const location = isStart ? selectedStartLocation : selectedEndLocation;
+       const timeKey = isStart ? "startTime" : "endTime";
+
+       if (location && location[timeKey]) {
+         const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+          <div class="popup-content">
+            <h3 class="font-bold">${isStart ? "Departure" : "Arrival"}</h3>
+            <p>${location[timeKey]}</p>
+          </div>
+        `);
+         marker.setPopup(popup);
+       }
+     }
+
+     return marker;
+   };
+
+    const updateRoute = () => {
+      if (!map.current || !mapReady) return;
+
+      // Remove existing route
+      if (map.current.getLayer("route-line")) {
+        map.current.removeLayer("route-line");
+      }
+      if (map.current.getSource("route")) {
+        map.current.removeSource("route");
+      }
+
+      // Get current marker positions
+      const coordinates = [];
+      markersRef.current.forEach((marker) => {
+        coordinates.push(marker.getLngLat().toArray());
+      });
+
+      // Add new route
+      map.current.addSource("route", {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              geometry: {
+                type: "LineString",
+                coordinates: coordinates,
+              },
+            },
+          ],
+        },
+      });
+
+      map.current.addLayer({
+        id: "route-line",
+        type: "line",
+        source: "route",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "#0078FF",
+          "line-width": 3,
+          "line-dasharray": [2, 1],
+        },
+      });
+    };
+
   // Handle markers and routes
  useEffect(() => {
    if (!map.current || !mapReady) return;
@@ -141,57 +265,13 @@ export default function Map() {
    markersRef.current.forEach((marker) => marker.remove());
    markersRef.current = [];
 
-   if (map.current.getLayer("route-line")) {
-     map.current.removeLayer("route-line");
-   }
-   if (map.current.getSource("route")) {
-     map.current.removeSource("route");
-   }
-
-   // Only proceed with markers and routes if waypointInputs has entries
    if (waypointInputs && waypointInputs.length > 0) {
-     // Get coordinates with fallbacks
      const startCoords = getCoordinates(startingPoint, [76.2144, 10.5276]);
      const endCoords = getCoordinates(endingPoint, [76.6141, 8.8932]);
 
-     // Create marker element
-     const createMarkerElement = (isStart = true) => {
-       const el = document.createElement("div");
-       el.className = isStart ? "starting-marker" : "ending-marker";
-       el.style.backgroundImage = `url(${flight})`;
-       el.style.width = "30px";
-       el.style.height = "30px";
-       el.style.backgroundSize = "100%";
-       el.style.borderRadius = "50%";
-       return el;
-     };
-
-     // Add markers with popups
-     const addMarker = (coordinates, isStart = true) => {
-       const el = createMarkerElement(isStart);
-       const marker = new mapboxgl.Marker(el)
-         .setLngLat(coordinates)
-         .addTo(map.current);
-
-       const location = isStart ? selectedStartLocation : selectedEndLocation;
-       const timeKey = isStart ? "startTime" : "endTime";
-
-       if (location && location[timeKey]) {
-         const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
-              <div class="popup-content">
-                <h3 class="font-bold">${isStart ? "Departure" : "Arrival"}</h3>
-                <p>${location[timeKey]}</p>
-              </div>
-            `);
-         marker.setPopup(popup);
-       }
-
-       return marker;
-     };
-
-     // Add start and end markers
-     const startMarker = addMarker(startCoords, true);
-     const endMarker = addMarker(endCoords, false);
+     // Add draggable markers
+     const startMarker = createDraggableMarker(startCoords, true);
+     const endMarker = createDraggableMarker(endCoords, false);
      markersRef.current.push(startMarker, endMarker);
 
      // Handle waypoints
@@ -199,75 +279,22 @@ export default function Map() {
        waypoints === 3 || (Array.isArray(waypoints) && waypoints.length === 3);
 
      if (isWaypoints3) {
-       // Add middle waypoint
        const midpoint = [
          (startCoords[0] + endCoords[0]) / 2,
          (startCoords[1] + endCoords[1]) / 2,
        ];
-
-       const midMarkerEl = document.createElement("div");
-       midMarkerEl.className = "waypoint-marker";
-       midMarkerEl.style.backgroundImage = `url(${flight})`;
-       midMarkerEl.style.width = "35px";
-       midMarkerEl.style.height = "35px";
-       midMarkerEl.style.backgroundSize = "100%";
-       midMarkerEl.style.borderRadius = "50%";
-
-       const midMarker = new mapboxgl.Marker(midMarkerEl)
-         .setLngLat(midpoint)
-         .setPopup(
-           new mapboxgl.Popup({ offset: 25 }).setHTML(
-             '<div class="popup-content"><h3>Waypoint</h3></div>'
-           )
-         )
-         .addTo(map.current);
-
-       markersRef.current.push(midMarker);
-
-       // Add route line
-       map.current.addSource("route", {
-         type: "geojson",
-         data: {
-           type: "FeatureCollection",
-           features: [
-             {
-               type: "Feature",
-               geometry: {
-                 type: "LineString",
-                 coordinates: [startCoords, midpoint, endCoords],
-               },
-             },
-           ],
-         },
-       });
-
-       map.current.addLayer({
-         id: "route-line",
-         type: "line",
-         source: "route",
-         layout: {
-           "line-join": "round",
-           "line-cap": "round",
-         },
-         paint: {
-           "line-color": "#0078FF",
-           "line-width": 3,
-           "line-dasharray": [2, 1],
-         },
-       });
+       const waypointMarker = createDraggableMarker(midpoint, false, true);
+       markersRef.current.push(waypointMarker);
      }
 
-     // Fit map to show all points
-     const bounds = new mapboxgl.LngLatBounds()
-       .extend(startCoords)
-       .extend(endCoords);
+     // Initial route update
+     updateRoute();
 
-     if (isWaypoints3) {
-       bounds.extend([
-         (startCoords[0] + endCoords[0]) / 2,
-         (startCoords[1] + endCoords[1]) / 2,
-       ]);
-     }
+     // Fit map bounds
+     const bounds = new mapboxgl.LngLatBounds();
+     markersRef.current.forEach((marker) => {
+       bounds.extend(marker.getLngLat());
+     });
 
      map.current.fitBounds(bounds, {
        padding: { top: 50, bottom: 50, left: 50, right: 50 },
