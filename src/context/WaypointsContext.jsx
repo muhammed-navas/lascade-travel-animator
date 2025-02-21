@@ -3,7 +3,7 @@ import { createContext, useContext, useState } from "react";
 const WaypointsContext = createContext();
 
 export function WaypointsProvider({ children }) {
-  const [waypoints, setWaypoints] = useState([]);
+  const [waypoints, setWaypoints] = useState(3);
   const [startingPoint, setStartingPoint] = useState("Thrissur, Kerala, India");
   const [endingPoint, setEndingPoint] = useState("kollam");
   const [startingSuggestions, setStartingSuggestions] = useState([]);
@@ -13,6 +13,8 @@ export function WaypointsProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isColor, setIsColor] = useState("Routes");
+
+   const [waypointInputs, setWaypointInputs] = useState([]);
 
   // Function to handle errors
   const handleError = (error, message = "Something went wrong") => {
@@ -80,6 +82,8 @@ export function WaypointsProvider({ children }) {
     updateWaypoints,
     isColor,
     setIsColor,
+    waypointInputs,
+    setWaypointInputs,
   };
 
   return (
