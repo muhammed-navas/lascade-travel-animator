@@ -33,7 +33,6 @@ export default function Sidebar() {
   // Debounce timer ref
   const debounceTimer = useRef(null);
 
-
   // Debounced search function
   const debouncedSearch = useCallback((query, isStart) => {
     if (debounceTimer.current) {
@@ -109,7 +108,13 @@ export default function Sidebar() {
         setSelectedEndLocation(location);
         setEndingSuggestions([]);
       }
-      updateWaypoints();
+      // Call updateWaypoints after both locations are selected
+      if (
+        (isStart && selectedEndLocation) ||
+        (!isStart && selectedStartLocation)
+      ) {
+        updateWaypoints();
+      }
     } catch (error) {
       handleError(error, "Failed to select location");
     }
@@ -127,7 +132,6 @@ export default function Sidebar() {
   const ClickButtonHandle = (item) => {
     setIsColor(item);
   };
-
 
   return (
     <div className="w-72 bg-[#000000]   ">

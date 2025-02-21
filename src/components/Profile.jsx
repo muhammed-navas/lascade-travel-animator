@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { FiCheck } from "react-icons/fi";
 import { IoClose } from "react-icons/io5";
 import { CiCircleCheck } from "react-icons/ci";
 import whatsapp from "../assets/socialMedia/whatsapp.png";
@@ -8,7 +7,6 @@ import instagram from "../assets/socialMedia/instagram.png";
 import tickTok from "../assets/socialMedia/tik-tok.png";
 import youtube from "../assets/socialMedia/youtube.png";
 import signOut from "../assets/signOut.png"
-import check from "../assets/check.png"
 
 export default function ProfilePopup({ isOpen, onClose }) {
   const [activeTab, setActiveTab] = useState("Profile");

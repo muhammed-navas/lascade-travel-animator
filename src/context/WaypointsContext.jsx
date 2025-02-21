@@ -3,13 +3,9 @@ import { createContext, useContext, useState } from "react";
 const WaypointsContext = createContext();
 
 export function WaypointsProvider({ children }) {
-  const [waypoints, setWaypoints] = useState(2);
-  // const [startingPoint, setStartingPoint] = useState(
-  //   "Edapally Overbridge, 682024, Edappally, Ernakulam, Ernakulam, Kerala, India"
-  // );
+  const [waypoints, setWaypoints] = useState([]);
   const [startingPoint, setStartingPoint] = useState("Thrissur, Kerala, India");
   const [endingPoint, setEndingPoint] = useState("kollam");
-  // const [endingPoint, setEndingPoint] = useState("Aluva, Kerala, India");
   const [startingSuggestions, setStartingSuggestions] = useState([]);
   const [endingSuggestions, setEndingSuggestions] = useState([]);
   const [selectedStartLocation, setSelectedStartLocation] = useState(null);
@@ -34,24 +30,24 @@ export function WaypointsProvider({ children }) {
     }
   };
 
-  // Function to update waypoints
+  // Updated updateWaypoints function
   const updateWaypoints = () => {
     try {
       const points = [];
       if (selectedStartLocation) {
         points.push({
-          name: selectedStartLocation.place_name,
-          longitude: selectedStartLocation.center[0],
-          latitude: selectedStartLocation.center[1],
+          name: startingPoint,
           type: "start",
+          latitude: selectedStartLocation.center[1],
+          longitude: selectedStartLocation.center[0],
         });
       }
       if (selectedEndLocation) {
         points.push({
-          name: selectedEndLocation.place_name,
-          longitude: selectedEndLocation.center[0],
-          latitude: selectedEndLocation.center[1],
+          name: endingPoint,
           type: "end",
+          latitude: selectedEndLocation.center[1],
+          longitude: selectedEndLocation.center[0],
         });
       }
       setWaypoints(points);
