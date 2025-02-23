@@ -4,8 +4,10 @@ const WaypointsContext = createContext();
 
 export function WaypointsProvider({ children }) {
   const [waypoints, setWaypoints] = useState(3);
-  const [startingPoint, setStartingPoint] = useState("Thrissur, Kerala, India");
-  const [endingPoint, setEndingPoint] = useState("kollam");
+  // const [startingPoint, setStartingPoint] = useState("Thrissur, Kerala, India");
+  const [startingPoint, setStartingPoint] = useState("");
+  // const [endingPoint, setEndingPoint] = useState("kollam");
+  const [endingPoint, setEndingPoint] = useState("");
   const [startingSuggestions, setStartingSuggestions] = useState([]);
   const [endingSuggestions, setEndingSuggestions] = useState([]);
   const [selectedStartLocation, setSelectedStartLocation] = useState(null);
@@ -15,6 +17,11 @@ export function WaypointsProvider({ children }) {
   const [isColor, setIsColor] = useState("Routes");
 
    const [waypointInputs, setWaypointInputs] = useState([]);
+     const [locations, setLocations] = useState({
+       start: { address: "", coordinates: null },
+       waypoints: [],
+       end: { address: "", coordinates: null },
+     });
 
   // Function to handle errors
   const handleError = (error, message = "Something went wrong") => {
@@ -84,6 +91,8 @@ export function WaypointsProvider({ children }) {
     setIsColor,
     waypointInputs,
     setWaypointInputs,
+    locations,
+    setLocations,
   };
 
   return (

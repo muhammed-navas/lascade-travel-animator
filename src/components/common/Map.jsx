@@ -2,316 +2,324 @@ import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useWaypoints } from "../../context/WaypointsContext";
-import flight from "../../assets/flight.png";
-import MapPreview from "../map/MapPreview";
+import car from "../../assets/car.png";
+import plane from "../../assets/plane.png";
+import destination from "../../assets/destination.png";
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 
 export default function Map() {
-  const {
-    waypoints,
-    isColor,
-    selectedStartLocation,
-    endingPoint,
-    startingPoint,
-    selectedEndLocation,
-    waypointInputs,
-  } = useWaypoints();
-
+  const { locations, setLocations } = useWaypoints();
   const mapContainer = useRef(null);
   const map = useRef(null);
   const [mapReady, setMapReady] = useState(false);
-  const [mapError, setMapError] = useState(null);
   const markersRef = useRef([]);
-  const animationRef = useRef(null);
+  const markerTypesRef = useRef([]);
 
-  // Location database with coordinates
-  const locationDatabase = {
-    thrissur: [76.2144, 10.5276],
-    kollam: [76.6141, 8.8932],
-    kochi: [76.2673, 9.9312],
-    bangalore: [77.5946, 12.9716],
-    bengaluru: [77.5946, 12.9716],
-    mumbai: [72.8777, 19.076],
-    delhi: [77.1025, 28.7041],
-    chennai: [80.2707, 13.0827],
-    hyderabad: [78.4867, 17.385],
-    pune: [73.8567, 18.5204],
-    ahmedabad: [72.5714, 23.0225],
-    jaipur: [75.7873, 26.9124],
-    surat: [72.8311, 21.1702],
-    lucknow: [80.9462, 26.8467],
-    kanpur: [80.3319, 26.4499],
-    nagpur: [79.0882, 21.1458],
-    indore: [75.8577, 22.7196],
-    thane: [72.9781, 19.2183],
-    bhopal: [77.4126, 23.2599],
-    visakhapatnam: [83.2185, 17.6868],
-    calicut: [75.7804, 11.2588],
-    trivandrum: [76.9366, 8.5241],
-    mangalore: [74.856, 12.9141],
-    goa: [74.124, 15.2993],
+  const validateCoordinates = (coords) => {
+    if (!coords) return null;
+
+    if (Array.isArray(coords)) {
+      return {
+        lng: Number(coords[0]),
+        lat: Number(coords[1]),
+      };
+    }
+
+    if (typeof coords === "object") {
+      if ("coordinates" in coords) {
+        return {
+          lng: Number(coords.coordinates[0]),
+          lat: Number(coords.coordinates[1]),
+        };
+      }
+      if ("lng" in coords && "lat" in coords) {
+        return {
+          lng: Number(coords.lng),
+          lat: Number(coords.lat),
+        };
+      }
+    }
+
+    return null;
   };
 
-  // Helper function to normalize location strings
-  const normalizeLocation = (location) => {
-    return location.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const getAddressFromCoordinates = async (lng, lat) => {
+    try {
+      const response = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxgl.accessToken}`
+      );
+      const data = await response.json();
+
+      if (data.features && data.features.length > 0) {
+        return {
+          address: data.features[0].place_name,
+          coordinates: [lng, lat],
+        };
+      }
+
+      return {
+        address: "Unknown location",
+        coordinates: [lng, lat],
+      };
+    } catch (error) {
+      console.error("Error fetching address:", error);
+      return {
+        address: "Error fetching address",
+        coordinates: [lng, lat],
+      };
+    }
   };
 
-  // Helper function to get coordinates from various input formats
-  const getCoordinates = (location, defaultCoords) => {
-    if (!location) return defaultCoords;
+  const handleMarkerDragEnd = (index) => {
+    return async () => {
+      if (!markersRef.current[index]) return;
 
-    // Handle string input
-    if (typeof location === "string") {
-      const normalizedInput = normalizeLocation(location);
+      const newLngLat = markersRef.current[index].getLngLat();
+      const markerType = markerTypesRef.current[index];
 
-      // Search through location database
-      for (const [key, coords] of Object.entries(locationDatabase)) {
-        if (normalizedInput.includes(key)) {
-          return coords;
+      // Get address for new coordinates
+      const locationData = await getAddressFromCoordinates(
+        newLngLat.lng,
+        newLngLat.lat
+      );
+
+      // Create a deep copy of locations
+      const newLocations = JSON.parse(JSON.stringify(locations));
+
+      // Update coordinates and address based on marker type
+      if (markerType === "start") {
+        newLocations.start = {
+          ...newLocations.start,
+          ...locationData,
+        };
+      } else if (markerType === "end") {
+        newLocations.end = {
+          ...newLocations.end,
+          ...locationData,
+        };
+      } else if (markerType === "waypoint") {
+        const waypointIndex = markerTypesRef.current
+          .slice(0, index)
+          .filter((type) => type === "waypoint").length;
+
+        if (newLocations.waypoints[waypointIndex]) {
+          newLocations.waypoints[waypointIndex] = {
+            ...newLocations.waypoints[waypointIndex],
+            ...locationData,
+          };
         }
       }
 
-      return defaultCoords;
-    }
+      // Update locations in context
+      setLocations(newLocations);
 
-    // Handle coordinate object
-    if (location.coordinates) {
-      return location.coordinates;
-    }
-
-    // Handle lat/lng object
-    if (location.lat !== undefined && location.lng !== undefined) {
-      return [location.lng, location.lat];
-    }
-
-    // Handle coordinate array
-    if (Array.isArray(location) && location.length >= 2) {
-      return [location[0], location[1]];
-    }
-
-    return defaultCoords;
+      // Update route
+      updateRoute();
+    };
   };
 
-  // Initialize map
+  const createCurvedLine = (start, end) => {
+    const midPoint = [(start.lng + end.lng) / 2, (start.lat + end.lat) / 2];
+
+    const controlPoint = [
+      midPoint[0] - (end.lat - start.lat) * 0.2,
+      midPoint[1] + (end.lng - start.lng) * 0.2,
+    ];
+
+    const points = [];
+    for (let t = 0; t <= 1; t += 0.01) {
+      points.push([
+        Math.pow(1 - t, 2) * start.lng +
+          2 * (1 - t) * t * controlPoint[0] +
+          Math.pow(t, 2) * end.lng,
+        Math.pow(1 - t, 2) * start.lat +
+          2 * (1 - t) * t * controlPoint[1] +
+          Math.pow(t, 2) * end.lat,
+      ]);
+    }
+    return points;
+  };
+
+  const createMarker = (coordinates, type, index) => {
+    const validCoords = validateCoordinates(coordinates);
+    if (!validCoords) {
+      console.error("Invalid coordinates:", coordinates);
+      return null;
+    }
+
+    const el = document.createElement("div");
+    el.className = "custom-marker";
+
+    const styles = {
+      start: { icon: car },
+      waypoint: { icon: plane },
+      end: { icon: destination },
+    };
+
+    const style = styles[type];
+
+    el.style.width = "40px";
+    el.style.height = "40px";
+    el.style.borderRadius = "50%";
+    el.style.backgroundImage = `url(${style.icon})`;
+    el.style.backgroundSize = "cover";
+    el.style.backgroundPosition = "center";
+    el.style.cursor = "move";
+
+    const marker = new mapboxgl.Marker({
+      element: el,
+      draggable: true,
+    }).setLngLat(validCoords);
+
+    marker.on("dragend", handleMarkerDragEnd(index));
+
+    return marker;
+  };
+
+  const updateRoute = () => {
+    if (!map.current || !mapReady) return;
+
+    if (map.current.getLayer("route")) {
+      map.current.removeLayer("route");
+      map.current.removeSource("route");
+    }
+
+    const coordinates = markersRef.current
+      .filter((marker) => marker)
+      .map((marker) => {
+        const lngLat = marker.getLngLat();
+        return { lng: lngLat.lng, lat: lngLat.lat };
+      });
+
+    if (coordinates.length < 2) return;
+
+    let routeCoordinates = [];
+    for (let i = 0; i < coordinates.length - 1; i++) {
+      const segment = createCurvedLine(coordinates[i], coordinates[i + 1]);
+      routeCoordinates = routeCoordinates.concat(segment);
+    }
+
+    map.current.addSource("route", {
+      type: "geojson",
+      data: {
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "LineString",
+          coordinates: routeCoordinates.map((coord) => [coord[0], coord[1]]),
+        },
+      },
+    });
+
+    map.current.addLayer({
+      id: "route",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+      },
+      paint: {
+        "line-color": "#FF0000",
+        "line-width": 4,
+        "line-opacity": 0.8,
+      },
+    });
+  };
+
   useEffect(() => {
     if (!mapContainer.current) return;
 
-    try {
-      map.current = new mapboxgl.Map({
-        container: mapContainer.current,
-        style: "mapbox://styles/mapbox/streets-v12",
-        center: [76.2673, 9.9312], // Default center
-        zoom: 12,
-        pitch: 45,
-        bearing: 0,
-        attributionControl: true,
-      });
+    map.current = new mapboxgl.Map({
+      container: mapContainer.current,
+      style: "mapbox://styles/mapbox/streets-v12",
+      center: [76.52179, 9.590026],
+      zoom: 7,
+      pitch: 45,
+      bearing: 0,
+    });
 
-      map.current.on("load", () => {
-        setMapReady(true);
-        map.current.resize();
-      });
+    map.current.on("load", () => {
+      setMapReady(true);
+    });
 
-      map.current.on("error", (error) => {
-        console.error("Mapbox error:", error);
-        setMapError(error);
-      });
-    } catch (error) {
-      console.error("Map initialization error:", error);
-      setMapError(error);
+    return () => map.current?.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!map.current || !mapReady || !locations) return;
+
+    markersRef.current.forEach((marker) => marker?.remove());
+    markersRef.current = [];
+    markerTypesRef.current = [];
+
+    let markerIndex = 0;
+
+    if (locations.start) {
+      const startMarker = createMarker(
+        locations.start.coordinates,
+        "start",
+        markerIndex
+      );
+      if (startMarker) {
+        markersRef.current.push(startMarker);
+        markerTypesRef.current.push("start");
+        markerIndex++;
+      }
     }
 
-    return () => {
-      if (map.current) {
-        map.current.remove();
+    if (locations.waypoints) {
+      locations.waypoints.forEach((waypoint) => {
+        const marker = createMarker(
+          waypoint.coordinates,
+          "waypoint",
+          markerIndex
+        );
+        if (marker) {
+          markersRef.current.push(marker);
+          markerTypesRef.current.push("waypoint");
+          markerIndex++;
+        }
+      });
+    }
+
+    if (locations.end) {
+      const endMarker = createMarker(
+        locations.end.coordinates,
+        "end",
+        markerIndex
+      );
+      if (endMarker) {
+        markersRef.current.push(endMarker);
+        markerTypesRef.current.push("end");
       }
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, [isColor]);
+    }
 
-  // Handle markers and routes
- useEffect(() => {
-   if (!map.current || !mapReady) return;
+    markersRef.current.forEach((marker) => {
+      if (marker) marker.addTo(map.current);
+    });
 
-   // Clear existing markers and routes
-   markersRef.current.forEach((marker) => marker.remove());
-   markersRef.current = [];
+    updateRoute();
 
-   if (map.current.getLayer("route-line")) {
-     map.current.removeLayer("route-line");
-   }
-   if (map.current.getSource("route")) {
-     map.current.removeSource("route");
-   }
+    if (markersRef.current.length > 0) {
+      const bounds = new mapboxgl.LngLatBounds();
+      markersRef.current.forEach((marker) => {
+        if (marker) bounds.extend(marker.getLngLat());
+      });
 
-   // Only proceed with markers and routes if waypointInputs has entries
-   if (waypointInputs && waypointInputs.length > 0) {
-     // Get coordinates with fallbacks
-     const startCoords = getCoordinates(startingPoint, [76.2144, 10.5276]);
-     const endCoords = getCoordinates(endingPoint, [76.6141, 8.8932]);
+      map.current.fitBounds(bounds, {
+        padding: { top: 50, bottom: 50, left: 50, right: 50 },
+        maxZoom: 9,
+      });
+    }
+  }, [locations, mapReady]);
 
-     // Create marker element
-     const createMarkerElement = (isStart = true) => {
-       const el = document.createElement("div");
-       el.className = isStart ? "starting-marker" : "ending-marker";
-       el.style.backgroundImage = `url(${flight})`;
-       el.style.width = "30px";
-       el.style.height = "30px";
-       el.style.backgroundSize = "100%";
-       el.style.borderRadius = "50%";
-       return el;
-     };
-
-     // Add markers with popups
-     const addMarker = (coordinates, isStart = true) => {
-       const el = createMarkerElement(isStart);
-       const marker = new mapboxgl.Marker(el)
-         .setLngLat(coordinates)
-         .addTo(map.current);
-
-       const location = isStart ? selectedStartLocation : selectedEndLocation;
-       const timeKey = isStart ? "startTime" : "endTime";
-
-       if (location && location[timeKey]) {
-         const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
-              <div class="popup-content">
-                <h3 class="font-bold">${isStart ? "Departure" : "Arrival"}</h3>
-                <p>${location[timeKey]}</p>
-              </div>
-            `);
-         marker.setPopup(popup);
-       }
-
-       return marker;
-     };
-
-     // Add start and end markers
-     const startMarker = addMarker(startCoords, true);
-     const endMarker = addMarker(endCoords, false);
-     markersRef.current.push(startMarker, endMarker);
-
-     // Handle waypoints
-     const isWaypoints3 =
-       waypoints === 3 || (Array.isArray(waypoints) && waypoints.length === 3);
-
-     if (isWaypoints3) {
-       // Add middle waypoint
-       const midpoint = [
-         (startCoords[0] + endCoords[0]) / 2,
-         (startCoords[1] + endCoords[1]) / 2,
-       ];
-
-       const midMarkerEl = document.createElement("div");
-       midMarkerEl.className = "waypoint-marker";
-       midMarkerEl.style.backgroundImage = `url(${flight})`;
-       midMarkerEl.style.width = "35px";
-       midMarkerEl.style.height = "35px";
-       midMarkerEl.style.backgroundSize = "100%";
-       midMarkerEl.style.borderRadius = "50%";
-
-       const midMarker = new mapboxgl.Marker(midMarkerEl)
-         .setLngLat(midpoint)
-         .setPopup(
-           new mapboxgl.Popup({ offset: 25 }).setHTML(
-             '<div class="popup-content"><h3>Waypoint</h3></div>'
-           )
-         )
-         .addTo(map.current);
-
-       markersRef.current.push(midMarker);
-
-       // Add route line
-       map.current.addSource("route", {
-         type: "geojson",
-         data: {
-           type: "FeatureCollection",
-           features: [
-             {
-               type: "Feature",
-               geometry: {
-                 type: "LineString",
-                 coordinates: [startCoords, midpoint, endCoords],
-               },
-             },
-           ],
-         },
-       });
-
-       map.current.addLayer({
-         id: "route-line",
-         type: "line",
-         source: "route",
-         layout: {
-           "line-join": "round",
-           "line-cap": "round",
-         },
-         paint: {
-           "line-color": "#0078FF",
-           "line-width": 3,
-           "line-dasharray": [2, 1],
-         },
-       });
-     }
-
-     // Fit map to show all points
-     const bounds = new mapboxgl.LngLatBounds()
-       .extend(startCoords)
-       .extend(endCoords);
-
-     if (isWaypoints3) {
-       bounds.extend([
-         (startCoords[0] + endCoords[0]) / 2,
-         (startCoords[1] + endCoords[1]) / 2,
-       ]);
-     }
-
-     map.current.fitBounds(bounds, {
-       padding: { top: 50, bottom: 50, left: 50, right: 50 },
-       maxZoom: isWaypoints3 ? 12 : 10,
-       pitch: isWaypoints3 ? 0 : 0,
-       bearing: isWaypoints3 ? 0 : 0,
-       duration: 2000,
-     });
-   }
- }, [
-   mapReady,
-   startingPoint,
-   endingPoint,
-   selectedStartLocation,
-   selectedEndLocation,
-   waypoints,
-   waypointInputs,
- ]);
+  console.log(locations, "----");
 
   return (
-    <div className="w-full h-full relative">
-      {isColor === "Preview" ? (
-        <div className="absolute inset-0 w-md h-[20rem] top-[50%] left-[50%] transform -translate-y-1/2 -translate-x-1/2 rounded-2xl">
-          <MapPreview />
-        </div>
-      ) : (
-        <div className="w-full h-full bg-[#121216] rounded-2xl overflow-hidden">
-          <div ref={mapContainer} className="w-full h-full" />
-        </div>
-      )}
-
-      {/* {isWaypoints3 && (
-        <div className="absolute bottom-2 left-2 z-10 flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-xl">
-          <span className="text-sm">
-            Flight path activated with 3 waypoints!
-          </span>
-        </div>
-      )} */}
-
-      {mapError && (
-        <div className="absolute bottom-2 right-2 z-10 bg-red-500 text-white px-4 py-2 rounded-xl">
-          <span className="text-sm">Error loading map</span>
-        </div>
-      )}
+    <div className="w-full h-full bg-[#121216] rounded-2xl overflow-hidden">
+      <div ref={mapContainer} className="w-full h-full" />
     </div>
   );
 }

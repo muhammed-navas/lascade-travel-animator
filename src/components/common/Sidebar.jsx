@@ -1,5 +1,5 @@
 import { FaCircle, FaMapMarkerAlt } from "react-icons/fa";
-import startLocationIcons from "../../assets/input-icons1.png";
+import startLocationIcons from "../../assets/end.png";
 import { useWaypoints } from "../../context/WaypointsContext";
 import { useEffect, useCallback, useRef, useState } from "react";
 import ClickRouteSideBar from "../ClickRouteSideBar";
