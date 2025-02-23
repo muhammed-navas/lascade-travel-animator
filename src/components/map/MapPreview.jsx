@@ -8,7 +8,9 @@ mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 
 const MapPreview = () => {
 
-  const { endingPoint, startingPoint } = useWaypoints();
+  // const { endingPoint, startingPoint } = useWaypoints();
+  const endingPoint = "aluva";
+  const startingPoint = 'kollam'
 
   const mapContainer = useRef(null);
   const map = useRef(null);
@@ -282,7 +284,7 @@ const MapPreview = () => {
         ),
       ];
 
-      if (map.current.getSource("animatedLine")) {
+      // if (map.current.getSource("animatedLine")) {
         map.current.getSource("animatedLine").setData({
           type: "Feature",
           properties: {},
@@ -291,7 +293,7 @@ const MapPreview = () => {
             coordinates: lineCoordinates,
           },
         });
-      }
+      // }
 
       if (marker.current) {
         marker.current.setLngLat(currentPoint);
