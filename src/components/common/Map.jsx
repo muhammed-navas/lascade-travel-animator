@@ -16,33 +16,33 @@ export default function Map() {
   const markersRef = useRef([]);
   const markerTypesRef = useRef([]);
 
-  const validateCoordinates = (coords) => {
-    if (!coords) return null;
+ const validateCoordinates = (coords) => {
+   if (!coords) return null;
 
-    if (Array.isArray(coords)) {
-      return {
-        lng: Number(coords[0]),
-        lat: Number(coords[1]),
-      };
-    }
+   if (Array.isArray(coords)) {
+     return {
+       lng: Number(coords[0]),
+       lat: Number(coords[1]),
+     };
+   }
 
-    if (typeof coords === "object") {
-      if ("coordinates" in coords) {
-        return {
-          lng: Number(coords.coordinates[0]),
-          lat: Number(coords.coordinates[1]),
-        };
-      }
-      if ("lng" in coords && "lat" in coords) {
-        return {
-          lng: Number(coords.lng),
-          lat: Number(coords.lat),
-        };
-      }
-    }
+   if (typeof coords === "object") {
+     if ("coordinates" in coords) {
+       return {
+         lng: Number(coords.coordinates[0]),
+         lat: Number(coords.coordinates[1]),
+       };
+     }
+     if ("lng" in coords && "lat" in coords) {
+       return {
+         lng: Number(coords.lng),
+         lat: Number(coords.lat),
+       };
+     }
+   }
 
-    return null;
-  };
+   return null;
+ };
 
   const getAddressFromCoordinates = async (lng, lat) => {
     try {
@@ -120,24 +120,56 @@ export default function Map() {
   };
 
   const createCurvedLine = (start, end) => {
-    const midPoint = [(start.lng + end.lng) / 2, (start.lat + end.lat) / 2];
+    // Calculate the distance between points
+    const dx = end.lng - start.lng;
+    const dy = end.lat - start.lat;
+    const distance = Math.sqrt(dx * dx + dy * dy);
 
-    const controlPoint = [
-      midPoint[0] - (end.lat - start.lat) * 0.2,
-      midPoint[1] + (end.lng - start.lng) * 0.2,
-    ];
+    // Adjust curve intensity based on distance
+    const curveIntensity = distance * 0.2;
 
+    // Calculate midpoint
+    const midPoint = {
+      lng: (start.lng + end.lng) / 2,
+      lat: (start.lat + end.lat) / 2,
+    };
+
+    // Calculate control points for smoother curves
+    const controlPoint1 = {
+      lng: midPoint.lng - dy * curveIntensity,
+      lat: midPoint.lat + dx * curveIntensity,
+    };
+
+    const controlPoint2 = {
+      lng: midPoint.lng + dy * curveIntensity,
+      lat: midPoint.lat - dx * curveIntensity,
+    };
+
+    // Generate curve points using cubic Bezier
     const points = [];
-    for (let t = 0; t <= 1; t += 0.01) {
+    const steps = 100; // Increase number of points for smoother curve
+
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      const mt = 1 - t;
+      const mt2 = mt * mt;
+      const mt3 = mt2 * mt;
+
       points.push([
-        Math.pow(1 - t, 2) * start.lng +
-          2 * (1 - t) * t * controlPoint[0] +
-          Math.pow(t, 2) * end.lng,
-        Math.pow(1 - t, 2) * start.lat +
-          2 * (1 - t) * t * controlPoint[1] +
-          Math.pow(t, 2) * end.lat,
+        start.lng * mt3 +
+          3 * controlPoint1.lng * mt2 * t +
+          3 * controlPoint2.lng * mt * t2 +
+          end.lng * t3,
+
+        start.lat * mt3 +
+          3 * controlPoint1.lat * mt2 * t +
+          3 * controlPoint2.lat * mt * t2 +
+          end.lat * t3,
       ]);
     }
+
     return points;
   };
 
@@ -158,7 +190,6 @@ export default function Map() {
     };
 
     const style = styles[type];
-
     el.style.width = "40px";
     el.style.height = "40px";
     el.style.borderRadius = "50%";
@@ -177,56 +208,56 @@ export default function Map() {
     return marker;
   };
 
-  const updateRoute = () => {
-    if (!map.current || !mapReady) return;
+const updateRoute = () => {
+  if (!map.current || !mapReady) return;
 
-    if (map.current.getLayer("route")) {
-      map.current.removeLayer("route");
-      map.current.removeSource("route");
-    }
+  if (map.current.getLayer("route")) {
+    map.current.removeLayer("route");
+    map.current.removeSource("route");
+  }
 
-    const coordinates = markersRef.current
-      .filter((marker) => marker)
-      .map((marker) => {
-        const lngLat = marker.getLngLat();
-        return { lng: lngLat.lng, lat: lngLat.lat };
-      });
-
-    if (coordinates.length < 2) return;
-
-    let routeCoordinates = [];
-    for (let i = 0; i < coordinates.length - 1; i++) {
-      const segment = createCurvedLine(coordinates[i], coordinates[i + 1]);
-      routeCoordinates = routeCoordinates.concat(segment);
-    }
-
-    map.current.addSource("route", {
-      type: "geojson",
-      data: {
-        type: "Feature",
-        properties: {},
-        geometry: {
-          type: "LineString",
-          coordinates: routeCoordinates.map((coord) => [coord[0], coord[1]]),
-        },
-      },
+  const coordinates = markersRef.current
+    .filter((marker) => marker)
+    .map((marker) => {
+      const lngLat = marker.getLngLat();
+      return { lng: lngLat.lng, lat: lngLat.lat };
     });
 
-    map.current.addLayer({
-      id: "route",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
+  if (coordinates.length < 2) return;
+
+  let routeCoordinates = [];
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    const segment = createCurvedLine(coordinates[i], coordinates[i + 1]);
+    routeCoordinates = routeCoordinates.concat(segment);
+  }
+
+  map.current.addSource("route", {
+    type: "geojson",
+    data: {
+      type: "Feature",
+      properties: {},
+      geometry: {
+        type: "LineString",
+        coordinates: routeCoordinates,
       },
-      paint: {
-        "line-color": "#FF0000",
-        "line-width": 4,
-        "line-opacity": 0.8,
-      },
-    });
-  };
+    },
+  });
+
+  map.current.addLayer({
+    id: "route",
+    type: "line",
+    source: "route",
+    layout: {
+      "line-join": "round",
+      "line-cap": "round",
+    },
+    paint: {
+      "line-color": "#FF0000",
+      "line-width": 4,
+      "line-opacity": 0.8,
+    },
+  });
+};
 
   useEffect(() => {
     if (!mapContainer.current) return;
@@ -235,8 +266,8 @@ export default function Map() {
       container: mapContainer.current,
       style: "mapbox://styles/mapbox/streets-v12",
       center: [76.52179, 9.590026],
-      zoom: 7,
-      pitch: 45,
+      zoom: 8,
+      pitch: 0,
       bearing: 0,
     });
 
