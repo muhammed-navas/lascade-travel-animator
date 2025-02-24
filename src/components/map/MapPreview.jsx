@@ -1,29 +1,21 @@
 import React, { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { useWaypoints } from "../../context/WaypointsContext";
-
+ 
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 
-const MapPreview = () => {
-
-  // const { endingPoint, startingPoint } = useWaypoints();
-  const endingPoint = "aluva";
-  const startingPoint = 'kollam'
+const MapPreview = ({ marker, locations }) => {
+  const endingPoint = locations.end.address;
+  const startingPoint = locations.start.address;
 
   const mapContainer = useRef(null);
   const map = useRef(null);
   const startMarkerRef = useRef(null);
   const endMarkerRef = useRef(null);
-  const marker = useRef(null);
   const animationFrameId = useRef(null);
   const isAnimating = useRef(false);
 
-
-
-  
-  // Initialize map
   useEffect(() => {
     if (!mapContainer.current) return;
 
@@ -218,20 +210,11 @@ const MapPreview = () => {
 
       if (startMarkerRef.current) startMarkerRef.current.remove();
       if (endMarkerRef.current) endMarkerRef.current.remove();
-      if (marker.current) marker.current.remove();
       startMarkerRef.current = createLocationMarker(startCoords, "#00ff00");
       startMarkerRef.current.addTo(map.current);
 
       endMarkerRef.current = createLocationMarker(endCoords, "#ff0000");
       endMarkerRef.current.addTo(map.current);
-
-      startMarkerRef.current.togglePopup();
-      endMarkerRef.current.togglePopup();
-
-      console.log(startCoords,'---', endCoords);
-      console.log(startMarkerRef.current, "***");
-      console.log(marker.current, "@@@");
-      console.log(map.current, "###");
 
       const vehicleEl = document.createElement("div");
       vehicleEl.className = "vehicle-marker";
@@ -246,7 +229,6 @@ const MapPreview = () => {
         .setLngLat(startCoords)
         .addTo(map.current);
 
-      // Set initial camera position without fitBounds
       map.current.flyTo({
         center: startCoords,
         zoom: 8,
@@ -266,7 +248,7 @@ const MapPreview = () => {
   const startAnimation = (startCoords, endCoords) => {
     isAnimating.current = true;
     let start = 0;
-    const duration = 8000 ;
+    const duration = 8000;
 
     function animate(timestamp) {
       if (!start) start = timestamp;
@@ -284,16 +266,14 @@ const MapPreview = () => {
         ),
       ];
 
-      // if (map.current.getSource("animatedLine")) {
-        map.current.getSource("animatedLine").setData({
-          type: "Feature",
-          properties: {},
-          geometry: {
-            type: "LineString",
-            coordinates: lineCoordinates,
-          },
-        });
-      // }
+      map.current.getSource("animatedLine").setData({
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "LineString",
+          coordinates: lineCoordinates,
+        },
+      });
 
       if (marker.current) {
         marker.current.setLngLat(currentPoint);
@@ -313,7 +293,6 @@ const MapPreview = () => {
         animationFrameId.current = requestAnimationFrame(animate);
       } else {
         isAnimating.current = false;
-        // Only call fitBounds at the end of the animation
         fitBoundsWithZoom(startCoords, endCoords, 50);
       }
     }
@@ -324,10 +303,6 @@ const MapPreview = () => {
   return (
     <div className="w-full h-full">
       <div ref={mapContainer} className="w-full h-full rounded-2xl" />
-      {/* <canvas
-        ref={canvasRef}
-        className="absolute top-0 left-0 w-full h-full z-[999] pointer-events-none"
-      /> */}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useWaypoints } from "../../context/WaypointsContext";
@@ -8,16 +8,16 @@ import destination from "../../assets/destination.png";
 import MapPreview from "../map/MapPreview";
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
-
+     
 export default function Map() {
   const { locations, setLocations, isColor } = useWaypoints();
   const mapContainer = useRef(null);
-  const map = useRef(null);
+  const map = useRef(null); 
   const [mapReady, setMapReady] = useState(false);
   const markersRef = useRef([]);
   const markerTypesRef = useRef([]);
 
-  const validateCoordinates = (coords) => {
+  const validateCoordinates = useCallback((coords) => {
     if (!coords) return null;
 
     if (Array.isArray(coords)) {
@@ -43,7 +43,7 @@ export default function Map() {
     }
 
     return null;
-  };
+  }, []);
 
   const getAddressFromCoordinates = async (lng, lat) => {
     try {
@@ -72,266 +72,273 @@ export default function Map() {
     }
   };
 
-  const handleMarkerDragEnd = (index) => {
-    return async () => {
-      if (!markersRef.current[index]) return;
+    const createCurvedLine = useCallback((start, end) => {
+      // Calculate the distance between points
+      const dx = end.lng - start.lng;
+      const dy = end.lat - start.lat;
+      const distance = Math.sqrt(dx * dx + dy * dy);
 
-      const newLngLat = markersRef.current[index].getLngLat();
-      const markerType = markerTypesRef.current[index];
+      // Adjust curve intensity based on distance
+      const curveIntensity = distance * 0.2;
 
-      // Get address for new coordinates
-      const locationData = await getAddressFromCoordinates(
-        newLngLat.lng,
-        newLngLat.lat
-      );
+      // Calculate midpoint
+      const midPoint = {
+        lng: (start.lng + end.lng) / 2,
+        lat: (start.lat + end.lat) / 2,
+      };
 
-      // Create a deep copy of locations
-      const newLocations = JSON.parse(JSON.stringify(locations));
+      // Calculate control points for smoother curves
+      const controlPoint1 = {
+        lng: midPoint.lng - dy * curveIntensity,
+        lat: midPoint.lat + dx * curveIntensity,
+      };
 
-      // Update coordinates and address based on marker type
-      if (markerType === "start") {
-        newLocations.start = {
-          ...newLocations.start,
-          ...locationData,
-        };
-      } else if (markerType === "end") {
-        newLocations.end = {
-          ...newLocations.end,
-          ...locationData,
-        };
-      } else if (markerType === "waypoint") {
-        const waypointIndex = markerTypesRef.current
-          .slice(0, index)
-          .filter((type) => type === "waypoint").length;
+      const controlPoint2 = {
+        lng: midPoint.lng + dy * curveIntensity,
+        lat: midPoint.lat - dx * curveIntensity,
+      };
 
-        if (newLocations.waypoints[waypointIndex]) {
-          newLocations.waypoints[waypointIndex] = {
-            ...newLocations.waypoints[waypointIndex],
+      // Generate curve points using cubic Bezier
+      const points = [];
+      const steps = 100; // Increase number of points for smoother curve
+
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const t2 = t * t;
+        const t3 = t2 * t;
+        const mt = 1 - t;
+        const mt2 = mt * mt;
+        const mt3 = mt2 * mt;
+
+        points.push([
+          start.lng * mt3 +
+            3 * controlPoint1.lng * mt2 * t +
+            3 * controlPoint2.lng * mt * t2 +
+            end.lng * t3,
+
+          start.lat * mt3 +
+            3 * controlPoint1.lat * mt2 * t +
+            3 * controlPoint2.lat * mt * t2 +
+            end.lat * t3,
+        ]);
+      }
+
+      return points;
+    }, []);
+
+ const updateRoute = useCallback(() => {
+   if (!map.current || !mapReady) return;
+
+   if (map.current.getLayer("route")) {
+     map.current.removeLayer("route");
+     map.current.removeSource("route");
+   }
+
+   const coordinates = markersRef.current
+     .filter((marker) => marker)
+     .map((marker) => {
+       const lngLat = marker.getLngLat();
+       return { lng: lngLat.lng, lat: lngLat.lat };
+     });
+
+   if (coordinates.length < 2) return;
+
+   let routeCoordinates = [];
+   for (let i = 0; i < coordinates.length - 1; i++) {
+     const segment = createCurvedLine(coordinates[i], coordinates[i + 1]);
+     routeCoordinates = routeCoordinates.concat(segment);
+   }
+
+   map.current.addSource("route", {
+     type: "geojson",
+     data: {
+       type: "Feature",
+       properties: {},
+       geometry: {
+         type: "LineString",
+         coordinates: routeCoordinates,
+       },
+     },
+   });
+
+   map.current.addLayer({
+     id: "route",
+     type: "line",
+     source: "route",
+     layout: {
+       "line-join": "round",
+       "line-cap": "round",
+     },
+     paint: {
+       "line-color": "#FF0000",
+       "line-width": 4,
+       "line-opacity": 0.8,
+     },
+   });
+ }, [mapReady, createCurvedLine]);
+
+  const handleMarkerDragEnd = useCallback(
+    (index) => {
+      return async () => {
+        if (!markersRef.current[index]) return;
+
+        const newLngLat = markersRef.current[index].getLngLat();
+        const markerType = markerTypesRef.current[index];
+
+        // Get address for new coordinates
+        const locationData = await getAddressFromCoordinates(
+          newLngLat.lng,
+          newLngLat.lat
+        );
+
+        // Create a deep copy of locations
+        const newLocations = JSON.parse(JSON.stringify(locations));
+
+        // Update coordinates and address based on marker type
+        if (markerType === "start") {
+          newLocations.start = {
+            ...newLocations.start,
             ...locationData,
           };
+        } else if (markerType === "end") {
+          newLocations.end = {
+            ...newLocations.end,
+            ...locationData,
+          };
+        } else if (markerType === "waypoint") {
+          const waypointIndex = markerTypesRef.current
+            .slice(0, index)
+            .filter((type) => type === "waypoint").length;
+
+          if (newLocations.waypoints[waypointIndex]) {
+            newLocations.waypoints[waypointIndex] = {
+              ...newLocations.waypoints[waypointIndex],
+              ...locationData,
+            };
+          }
         }
+
+        // Update locations in context
+        setLocations(newLocations);
+
+        // Update route
+        updateRoute();
+      };
+    },
+    [locations, setLocations, updateRoute]
+  );
+
+
+
+  const createMarker = useCallback(
+    (coordinates, type, index) => {
+      const validCoords = validateCoordinates(coordinates);
+      if (!validCoords) {
+        console.error("Invalid coordinates:", coordinates);
+        return null;
       }
 
-      // Update locations in context
-      setLocations(newLocations);
+      const el = document.createElement("div");
+      el.className = "custom-marker";
 
-      // Update route
-      updateRoute();
-    };
-  };
+      const styles = {
+        start: { icon: car },
+        waypoint: { icon: plane },
+        end: { icon: destination },
+      };
 
-  const createCurvedLine = (start, end) => {
-    // Calculate the distance between points
-    const dx = end.lng - start.lng;
-    const dy = end.lat - start.lat;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+      const style = styles[type];
+      el.style.width = "40px";
+      el.style.height = "40px";
+      el.style.borderRadius = "50%";
+      el.style.backgroundImage = `url(${style.icon})`;
+      el.style.backgroundSize = "cover";
+      el.style.backgroundPosition = "center";
+      el.style.cursor = "move";
 
-    // Adjust curve intensity based on distance
-    const curveIntensity = distance * 0.2;
+      const marker = new mapboxgl.Marker({
+        element: el,
+        draggable: true,
+      }).setLngLat(validCoords);
 
-    // Calculate midpoint
-    const midPoint = {
-      lng: (start.lng + end.lng) / 2,
-      lat: (start.lat + end.lat) / 2,
-    };
+      marker.on("dragend", handleMarkerDragEnd(index));
 
-    // Calculate control points for smoother curves
-    const controlPoint1 = {
-      lng: midPoint.lng - dy * curveIntensity,
-      lat: midPoint.lat + dx * curveIntensity,
-    };
+      return marker;
+    },
+    [handleMarkerDragEnd, validateCoordinates]
+  );
 
-    const controlPoint2 = {
-      lng: midPoint.lng + dy * curveIntensity,
-      lat: midPoint.lat - dx * curveIntensity,
-    };
+ 
 
-    // Generate curve points using cubic Bezier
-    const points = [];
-    const steps = 100; // Increase number of points for smoother curve
+  useEffect(() => {
+    if (!map.current || !mapReady || !locations || isColor !== "Routes") return;
 
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const t2 = t * t;
-      const t3 = t2 * t;
-      const mt = 1 - t;
-      const mt2 = mt * mt;
-      const mt3 = mt2 * mt;
+    markersRef.current = [];
+    markerTypesRef.current = [];
 
-      points.push([
-        start.lng * mt3 +
-          3 * controlPoint1.lng * mt2 * t +
-          3 * controlPoint2.lng * mt * t2 +
-          end.lng * t3,
+    let markerIndex = 0;
 
-        start.lat * mt3 +
-          3 * controlPoint1.lat * mt2 * t +
-          3 * controlPoint2.lat * mt * t2 +
-          end.lat * t3,
-      ]);
-    }
-
-    return points;
-  };
-
-  const createMarker = (coordinates, type, index) => {
-    const validCoords = validateCoordinates(coordinates);
-    if (!validCoords) {
-      console.error("Invalid coordinates:", coordinates);
-      return null;
-    }
-
-    const el = document.createElement("div");
-    el.className = "custom-marker";
-
-    const styles = {
-      start: { icon: car },
-      waypoint: { icon: plane },
-      end: { icon: destination },
-    };
-
-    const style = styles[type];
-    el.style.width = "40px";
-    el.style.height = "40px";
-    el.style.borderRadius = "50%";
-    el.style.backgroundImage = `url(${style.icon})`;
-    el.style.backgroundSize = "cover";
-    el.style.backgroundPosition = "center";
-    el.style.cursor = "move";
-
-    const marker = new mapboxgl.Marker({
-      element: el,
-      draggable: true,
-    }).setLngLat(validCoords);
-
-    marker.on("dragend", handleMarkerDragEnd(index));
-
-    return marker;
-  };
-
-  const updateRoute = () => {
-    if (!map.current || !mapReady) return;
-
-    if (map.current.getLayer("route")) {
-      map.current.removeLayer("route");
-      map.current.removeSource("route");
-    }
-
-    const coordinates = markersRef.current
-      .filter((marker) => marker)
-      .map((marker) => {
-        const lngLat = marker.getLngLat();
-        return { lng: lngLat.lng, lat: lngLat.lat };
-      });
-
-    if (coordinates.length < 2) return;
-
-    let routeCoordinates = [];
-    for (let i = 0; i < coordinates.length - 1; i++) {
-      const segment = createCurvedLine(coordinates[i], coordinates[i + 1]);
-      routeCoordinates = routeCoordinates.concat(segment);
-    }
-
-    map.current.addSource("route", {
-      type: "geojson",
-      data: {
-        type: "Feature",
-        properties: {},
-        geometry: {
-          type: "LineString",
-          coordinates: routeCoordinates,
-        },
-      },
-    });
-
-    map.current.addLayer({
-      id: "route",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": "#FF0000",
-        "line-width": 4,
-        "line-opacity": 0.8,
-      },
-    });
-  };
-
-
-useEffect(() => {
-  if (!map.current || !mapReady || !locations || isColor !== "Routes") return;
-
-  // Clear existing markers
-  markersRef.current.forEach((marker) => marker?.remove());
-  markersRef.current = [];
-  markerTypesRef.current = [];
-
-  let markerIndex = 0;
-
-  // Add markers
-  if (locations.start) {
-    const startMarker = createMarker(
-      locations.start.coordinates,
-      "start",
-      markerIndex
-    );
-    if (startMarker) {
-      markersRef.current.push(startMarker);
-      markerTypesRef.current.push("start");
-      markerIndex++;
-    }
-  }
-
-  if (locations.waypoints) {
-    locations.waypoints.forEach((waypoint) => {
-      const marker = createMarker(
-        waypoint.coordinates,
-        "waypoint",
+    // Add markers
+    if (locations.start) {
+      const startMarker = createMarker(
+        locations.start.coordinates,
+        "start",
         markerIndex
       );
-      if (marker) {
-        markersRef.current.push(marker);
-        markerTypesRef.current.push("waypoint");
+      if (startMarker) {
+        markersRef.current.push(startMarker);
+        markerTypesRef.current.push("start");
         markerIndex++;
       }
-    });
-  }
-
-  if (locations.end) {
-    const endMarker = createMarker(
-      locations.end.coordinates,
-      "end",
-      markerIndex
-    );
-    if (endMarker) {
-      markersRef.current.push(endMarker);
-      markerTypesRef.current.push("end");
     }
-  }
 
-  // Add markers to map
-  markersRef.current.forEach((marker) => {
-    if (marker) marker.addTo(map.current);
-  });
+    if (locations.waypoints) {
+      locations.waypoints.forEach((waypoint) => {
+        const marker = createMarker(
+          waypoint.coordinates,
+          "waypoint",
+          markerIndex
+        );
+        if (marker) {
+          markersRef.current.push(marker);
+          markerTypesRef.current.push("waypoint");
+          markerIndex++;
+        }
+      });
+    }
 
-  // Update route and fit bounds
-  updateRoute();
+    if (locations.end) {
+      const endMarker = createMarker(
+        locations.end.coordinates,
+        "end",
+        markerIndex
+      );
+      if (endMarker) {
+        markersRef.current.push(endMarker);
+        markerTypesRef.current.push("end");
+      }
+    }
 
-  if (markersRef.current.length > 0) {
-    const bounds = new mapboxgl.LngLatBounds();
+    // Add markers to map
     markersRef.current.forEach((marker) => {
-      if (marker) bounds.extend(marker.getLngLat());
+      if (marker) marker.addTo(map.current);
     });
 
-    map.current.fitBounds(bounds, {
-      padding: { top: 50, bottom: 50, left: 50, right: 50 },
-      maxZoom: 9,
-    });
-  }
-}, [locations, mapReady, isColor]);
+    // Update route and fit bounds
+    updateRoute();
+
+    if (markersRef.current.length > 0) {
+      const bounds = new mapboxgl.LngLatBounds();
+      markersRef.current.forEach((marker) => {
+        if (marker) bounds.extend(marker.getLngLat());
+      });
+
+      map.current.fitBounds(bounds, {
+        padding: { top: 50, bottom: 50, left: 50, right: 50 },
+        maxZoom: 9,
+      });
+    }
+  }, [locations, mapReady, isColor, createMarker, updateRoute]);
 
   useEffect(() => {
     if (!mapContainer.current || !isColor || isColor !== "Routes") return;
@@ -365,23 +372,19 @@ useEffect(() => {
         setMapReady(false);
       }
     };
-  }, [isColor]); 
+  }, [isColor]);
 
-
-  return (    
+  return (
     <div className="w-full h-full bg-[#121216] rounded-2xl overflow-hidden">
-      {/* <div ref={mapContainer} className="w-full h-full" /> */}
       {isColor === "Routes" ? (
         <div className="w-full h-full  bg-[#121216] rounded-2xl overflow-hidden">
           <div ref={mapContainer} className="w-full h-full" />
         </div>
       ) : (
         <div className="absolute  inset-0 w-md h-[20rem] top-[50%] left-[50%] transform -translate-y-1/2 -translate-x-1/2 rounded-2xl">
-          <MapPreview />
-          {/* <ThreeJSCar /> */}
+          <MapPreview marker={markersRef} locations={locations} />
         </div>
       )}
     </div>
   );
-  
 }
